@@ -6,8 +6,8 @@ This is a Swift 4.0 version demo about how to implement a decision tree data str
 The tree node has been abstracted into such an interface:
 
 ``` swift
-class Tree {
-  public init(_ key: String, branches: [String: Any])
+class DecisionTree {
+  public init(_ id: String, branches: [String: Any])
   public func search(_ data:[String: String]) throws -> String
 }
 ```
