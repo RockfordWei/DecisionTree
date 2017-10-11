@@ -43,6 +43,9 @@ open class DecisionTree {
 
     /// Unsupported Algorithm
     case Unsupported
+
+    /// No data records
+    case EmptyDataset
   }
 
   /// search for the decision by providing the data set
@@ -67,34 +70,76 @@ open class DecisionTree {
   }
 }
 
+/// General form of a decision tree builder
 public protocol DecisionTreeBuilder {
   /// build a tree from a dictionary
-  static func Build(byDictionary: [[String: String]]) throws -> DecisionTree
-  static func Build(byReference: OpaquePointer) throws -> DecisionTree
+  /// - parameters:
+  ///   - for: outcome field name
+  ///   - from: data source, all values must be discrete
+  /// - returns: a DecisionTree instance
+  /// - throws: Exception
+  static func Build(_ `for`: String, from: [[String: String]]) throws -> DecisionTree
 }
 
 open class DecisionTreeBuilderID3:DecisionTreeBuilder {
 
+  public static func Build(_ `for`: String, from: [[String: String]]) throws -> DecisionTree {
+    throw DecisionTree.Exception.Unsupported
+  }
+
+  /// evaluate all factors for a specific outcome
+  /// - parameters:
+  ///   - for: outcome field name
+  ///   - from: data source
+  /// - returns: an array of field names other than the outcome, sorted by its entropy
+  /// - throws: Exceptions:
+  ///   - EmptyDataset: when data source is empty
+  ///   - UnexpectedKey: when data source hasn't a valid outcome field
+  public static func Evaluate(`for`: String, from: [[String: String]]) throws -> [String] {
+    guard let sample = from.first else {
+      throw DecisionTree.Exception.EmptyDataset
+    }
+    let fields: [String] = sample.keys.map { $0 }
+    guard fields.contains(`for`) else {
+      throw DecisionTree.Exception.UnexpectedKey
+    }
+    let factors = fields.filter { $0 != `for` }
+    guard factors.count > 1 else {
+      return factors
+    }//end if
+    let objective:[String] = from.map { $0[`for`] ?? "" }
+    let gain = Entropy(of: objective)
+    var gains: [String: Double] = [:]
+    factors.forEach { factor in
+      gains[factor] = gain - Entropy(of: factor, for: `for`, from: from)
+    }
+    debugPrint(gains)
+    let sorted:[String] = gains.sorted { i, j in
+      return i.value > j.value
+      }.map { $0.key }
+    return sorted
+  }
+
   /// calculate the entropy of a specific column / field, i.e, `sum(p * lg(p))`
   /// - parameters:
-  ///   - ofColumn: a discrete column data in a table
+  ///   - of: a discrete column data in a table
   /// - returns: a bit value.
-  public static func Entropy(ofColumn: [String]) -> Double {
-    let p = Possibility(ofColumn: ofColumn)
+  public static func Entropy(of: [String]) -> Double {
+    let p = Possibility(of: of)
     return p.reduce(0) { $0 - $1.value * log2($1.value) }
   }
 
   /// calculate the conditional entropy of two columns
   /// - parameters:
-  ///   - ofColumn: conditional column (factor)
-  ///   - forColumn: outcome column
-  ///   - dataset: dataset that includes both columns
+  ///   - of: conditional column (factor)
+  ///   - for: outcome column
+  ///   - from: dataset that includes both columns
   /// - returns: a bit value
-  public static func Entropy(ofColumn: String, forColumn: String, dataset: [[String: String]]) -> Double {
+  public static func Entropy(of: String, `for`: String, from: [[String: String]]) -> Double {
     var subview: [String:[String]] = [:]
-    for rec in dataset {
-      if let column = rec[ofColumn],
-        let current = rec[forColumn] {
+    for rec in from {
+      if let column = rec[of],
+        let current = rec[`for`] {
         if let sub = subview[column] {
           var sub2 = sub
           sub2.append(current)
@@ -106,8 +151,8 @@ open class DecisionTreeBuilderID3:DecisionTreeBuilder {
     }
 
     let primary:[String] = subview.keys.map {$0}
-    let distribution = Possibility(ofColumn: primary)
-    let sub = Dictionary(uniqueKeysWithValues: subview.map { ($0, Entropy(ofColumn: $1)) })
+    let distribution = Possibility(of: primary)
+    let sub = Dictionary(uniqueKeysWithValues: subview.map { ($0, Entropy(of: $1)) })
     var total = 0.0
     for k in primary {
       if let i = distribution[k],
@@ -117,11 +162,13 @@ open class DecisionTreeBuilderID3:DecisionTreeBuilder {
     }
     return total
   }
+
   /// generate regulated possibility distribution based on frequency
-  /// - parameters: ofColumn, a column in a data table
+  /// - parameters:
+  ///   - of: a column in a data table
   /// - returns: possibilty distribution table, each key has a corresponding possiblity value ranges in [0, 1]
-  public static func Possibility(ofColumn: [String]) -> [String: Double] {
-    let counters = Frequency(ofColumn: ofColumn)
+  public static func Possibility(of: [String]) -> [String: Double] {
+    let counters = Frequency(of: of)
     let total = Double(counters.reduce(0) { $0 + $1.value })
     return Dictionary(uniqueKeysWithValues: counters.map {
       ($0, Double($1) / total)
@@ -131,11 +178,11 @@ open class DecisionTreeBuilderID3:DecisionTreeBuilder {
   /// enumerate frequency by value string
   /// equivalent to `SELECT field, COUNT(*) FROM table GROUP BY field`
   /// - parameters:
-  ///   - ofColumn: column of the data table
+  ///   - of: column of the data table
   /// - returns: a dictionary of a certain value with its frequency
-  public static func Frequency(ofColumn: [String]) -> [String: UInt] {
+  public static func Frequency(of: [String]) -> [String: UInt] {
     var counters : [String: UInt] = [:]
-    ofColumn.forEach { value in
+    of.forEach { value in
       if let existing = counters[value] {
         counters[value] = existing + 1
       } else {
@@ -144,13 +191,5 @@ open class DecisionTreeBuilderID3:DecisionTreeBuilder {
     }
     return counters
   }
-
-  public static func Build(byDictionary: [[String: String]]) throws -> DecisionTree {
-    throw DecisionTree.Exception.Unsupported
-  }
-  public static func Build(byReference: OpaquePointer) throws -> DecisionTree {
-    throw DecisionTree.Exception.Unsupported
-  }
-
 
 }

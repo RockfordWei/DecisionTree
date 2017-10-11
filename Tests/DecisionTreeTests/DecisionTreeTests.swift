@@ -40,10 +40,16 @@ class DecisionTreeTests: XCTestCase {
 
   func testEntropies() {
     let play:[String] = discreteRecords.map { $0["play"] ?? "" }
-    let gain = DecisionTreeBuilderID3.Entropy(ofColumn: play)
-    let gainOutlook = DecisionTreeBuilderID3.Entropy(ofColumn: "outlook", forColumn: "play", dataset: discreteRecords)
+    let gain = DecisionTreeBuilderID3.Entropy(of: play)
+    let gainOutlook = DecisionTreeBuilderID3.Entropy(of: "outlook", for: "play", from: discreteRecords)
     print(gain, gainOutlook)
     XCTAssertGreaterThan(gain, gainOutlook)
+    do {
+      let sorted = try DecisionTreeBuilderID3.Evaluate(for: "play", from: discreteRecords)
+      XCTAssertEqual(sorted, ["outlook", "humid", "windy"])
+    }catch {
+      XCTFail(error.localizedDescription)
+    }
   }
 
   static var allTests = [
