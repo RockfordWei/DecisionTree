@@ -39,10 +39,7 @@ class DecisionTreeTests: XCTestCase {
 
   func testTree() {
     do {
-      guard let tree = try DecisionTreeBuilderID3.Build("play", from: discreteRecords) as? DecisionTree else {
-        XCTFail("General Failure")
-        return
-      }
+      let tree = try DecisionTreeBuilderID3.Build("play", from: discreteRecords)
       print(tree)
       let windy = DecisionTree("windy", branches: ["true": "false", "false": "true"])
       let humid = DecisionTree("humid", branches: ["false": "true", "true": "false"])
