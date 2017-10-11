@@ -37,16 +37,43 @@ class DecisionTreeTests: XCTestCase {
     }
   }
 
+  func testTree() {
+    do {
+      guard let tree = try DecisionTreeBuilderID3.Build("play", from: discreteRecords) as? DecisionTree else {
+        XCTFail("General Failure")
+        return
+      }
+      print(tree)
+      let windy = DecisionTree("windy", branches: ["true": "false", "false": "true"])
+      let humid = DecisionTree("humid", branches: ["false": "true", "true": "false"])
+      let outlook = DecisionTree("outlook", branches: ["sunny":humid, "overcast": "true", "rain": windy])
+      XCTAssertEqual(tree, outlook)
+      for r in discreteRecords {
+        guard let history = r["play"] else {
+          XCTFail("Unexpected Null Record")
+          break
+        }
+        do {
+          let prediction = try tree.search(r)
+          XCTAssertEqual(prediction, history)
+        }catch {
+          XCTFail(error.localizedDescription)
+        }
+      }
+    }catch {
+      XCTFail(error.localizedDescription)
+    }
+  }
 
   func testEntropies() {
     let play:[String] = discreteRecords.map { $0["play"] ?? "" }
     let gain = DecisionTreeBuilderID3.Entropy(of: play)
-    let gainOutlook = DecisionTreeBuilderID3.Entropy(of: "outlook", for: "play", from: discreteRecords)
-    print(gain, gainOutlook)
-    XCTAssertGreaterThan(gain, gainOutlook)
     do {
+      let gainOutlook = try DecisionTreeBuilderID3.Entropy(of: "outlook", for: "play", from: discreteRecords)
+      print(gain, gainOutlook)
+      XCTAssertGreaterThan(gain, gainOutlook)
       let sorted = try DecisionTreeBuilderID3.Evaluate(for: "play", from: discreteRecords)
-      XCTAssertEqual(sorted, ["outlook", "humid", "windy"])
+      XCTAssertEqual(sorted.sorted, ["outlook", "windy", "humid"])
     }catch {
       XCTFail(error.localizedDescription)
     }
@@ -54,6 +81,7 @@ class DecisionTreeTests: XCTestCase {
 
   static var allTests = [
     ("testExample", testExample),
-    ("testEntropies", testEntropies)
+    ("testEntropies", testEntropies),
+    ("testTree", testTree)
     ]
 }
