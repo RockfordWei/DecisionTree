@@ -93,6 +93,9 @@ open class DecisionTree: Equatable, CustomStringConvertible {
 
     /// General Failure
     case GeneralFailure
+
+    /// Data Source Error, such as a SQL database
+    case DataSource(message: String)
   }
 
   /// search for the decision by providing the data set
@@ -123,7 +126,8 @@ public protocol DecisionTreeBuilder {
   /// - parameters:
   ///   - for: outcome field name
   ///   - from: data source
+  ///   - tag: optional, name of the data source
   /// - returns: a DecisionTree instance
   /// - throws: Exception
-  static func Build(_ `for`: String, from: Any) throws -> DecisionTree
+  static func Build(_ `for`: String, from: Any, tag: String) throws -> DecisionTree
 }

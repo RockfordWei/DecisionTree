@@ -16,8 +16,9 @@ public struct ID3EvaluationSheet {
   }
 }
 
-open class DecisionTreeBuilderID3:DecisionTreeBuilder {
+open class DTBuilderID3Memory:DecisionTreeBuilder {
 
+  /// Build a decision tree node recursively.
   public static func BuildRecursively(_ `for`: String, from: [[String: String]]) throws -> Any {
     let factors = try Evaluate(for: `for`, from: from)
     guard factors.gain > 0 else {
@@ -52,7 +53,7 @@ open class DecisionTreeBuilderID3:DecisionTreeBuilder {
     return DecisionTree(primary, branches: branches)
   }
 
-  public static func Build(_ `for`: String, from: Any) throws -> DecisionTree {
+  public static func Build(_ `for`: String, from: Any, tag: String = "") throws -> DecisionTree {
     guard from is [[String: String]],
       let f = from as? [[String: String]] else {
       throw DecisionTree.Exception.Unsupported
