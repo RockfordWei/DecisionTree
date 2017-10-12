@@ -28,13 +28,6 @@ class DecisionTreeTests: XCTestCase {
 
   var mysql: MySQL!
 
-  func testMySQL() {
-    do {
-      _ = try DTBuilderID3MySQL.Build("play", from: mysql, tag: "golf")
-    }catch {
-      XCTFail(error.localizedDescription)
-    }
-  }
   override func setUp() {
     mysql = MySQL()
     let host = "MYHST".sysEnv
@@ -123,6 +116,19 @@ class DecisionTreeTests: XCTestCase {
           XCTFail(error.localizedDescription)
         }
       }
+    }catch {
+      XCTFail(error.localizedDescription)
+    }
+  }
+
+  func testMySQL() {
+    do {
+      let tree = try DTBuilderID3MySQL.Build("play", from: mysql, tag: "golf")
+      print(tree)
+      let windy = DecisionTree("windy", branches: ["true": "false", "false": "true"])
+      let humid = DecisionTree("humid", branches: ["false": "true", "true": "false"])
+      let outlook = DecisionTree("outlook", branches: ["sunny":humid, "overcast": "true", "rain": windy])
+      XCTAssertEqual(tree, outlook)
     }catch {
       XCTFail(error.localizedDescription)
     }

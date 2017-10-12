@@ -11,13 +11,15 @@ let package = Package(
             targets: ["DecisionTree"]),
     ],
     dependencies: [
-      .package(url: "https://github.com/PerfectlySoft/Perfect-MySQL.git", "3.0.0" ..< "4.0.0")
+      .package(url: "https://github.com/PerfectlySoft/Perfect-MySQL.git", "3.0.0" ..< "4.0.0"),
+      .package(url: "https://github.com/PerfectlySoft/Perfect-Thread.git", "3.0.0" ..< "4.0.0")
     ],
     targets: [
         .target(
             name: "DecisionTree",
             dependencies: [
-              "PerfectMySQL"
+              "PerfectMySQL", 
+              "PerfectThread"
             ]),
         .testTarget(
             name: "DecisionTreeTests",
