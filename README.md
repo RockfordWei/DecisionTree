@@ -14,6 +14,3 @@ class DecisionTree {
 
 All values in the objective data source must be discrete and converted into String.
 
-# Build & Test
-
-`git clone` this project then `./test.sh`
