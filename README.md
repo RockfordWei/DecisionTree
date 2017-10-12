@@ -92,6 +92,19 @@ let outlook = DecisionTree("outlook",
 	branches: ["sunny":humid, "overcast": "true", "rain": windy])
 ```
 
+Which is coming from a data table as below:
+
+``` swift
+  let discreteRecords: [[String: String]] = [
+    ["outlook": "sunny",    "humid": "true", "windy": "false", "play": "false"],
+    ["outlook": "sunny",    "humid": "true", "windy": "true",  "play": "false"],
+    ["outlook": "overcast", "humid": "true", "windy": "false", "play": "true" ],
+...
+    ["outlook": "rain",     "humid": "true", "windy": "true",  "play": "false"],
+  ]
+
+```
+
 Perfect DecisionTree module provides two different solutions depending on type of the data source - in memory Array/Dictionary or a database connection.
 
 ### In-Memory Toy
@@ -100,7 +113,7 @@ You can use `DTBuilderID3Memory` to create such a tree by a Swift Dictionary - A
 
 ``` swift
 let tree = try DTBuilderID3Memory.Build(
-	"play", from: [aDictionary])
+	"play", from: discreteRecords)
 ```
 
 This method is single threaded function which is aiming on educational purposes to help developers understand the textbook algorithm.
@@ -109,11 +122,11 @@ Please check the testing script for sample data.
 
 ### Production Builder with MySQL
 
-This library also provides a powerful builder powered by mysql, which can scan the whole table in an amazing speed and get the job done:
+This library also provides a powerful builder powered by mysql, which can scan the whole table in an amazing speed and get the job done - assuming the above data has been transferred to a `golf` table stored in the database.
 
 ``` swift
 let tree = try DTBuilderID3MySQL.Build(
-	"outcomeColumn", from: mysqlConnection, tag: "tableName")
+	"play", from: mysqlConnection, tag: "golf")
 ```
 
 It will split the table into views recursively without moving or writing any data, in a threading queue. The major cost is the memory of stacks for deep walking with nothing else.
