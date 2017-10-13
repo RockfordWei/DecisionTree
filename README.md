@@ -92,7 +92,7 @@ let outlook = DecisionTree("outlook",
 	branches: ["sunny":humid, "overcast": "true", "rain": windy])
 ```
 
-Which is coming from a data table as below:
+Which is coming from a data table as below, by ID3 entropy algorithm:
 
 ``` swift
   let discreteRecords: [[String: String]] = [
