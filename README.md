@@ -105,6 +105,16 @@ Which is coming from a data table as below:
 
 ```
 
+By applying such a tree, it is possible to make a prediction based on the history pattern:
+
+``` swift
+// if input a new record in form of [String:String]
+let prediction = try tree.search(newRecord)
+
+// prediction is the result of the outcome,
+// for example, if the new record outlook is "overcast", 
+// then the outcome prediction will be "true"
+```
 Perfect DecisionTree module provides two different solutions depending on type of the data source - in memory Array/Dictionary or a database connection.
 
 ### In-Memory Toy
