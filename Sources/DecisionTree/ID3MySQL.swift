@@ -4,27 +4,69 @@
 //  Created by Rocky Wei on 2017-10-12.
 //  Copyright © 2017 Rocky Wei. All rights reserved.
 //
-
+import Dispatch
 import Foundation
 import PerfectMySQL
-import PerfectThread
+
+class ThreadingLock {
+  var mutex = pthread_mutex_t()
+  /// Initialize a new lock object.
+  public init() {
+    var attr = pthread_mutexattr_t()
+    pthread_mutexattr_init(&attr)
+    pthread_mutexattr_settype(&attr, Int32(PTHREAD_MUTEX_RECURSIVE))
+    pthread_mutex_init(&mutex, &attr)
+  }
+
+  deinit {
+    pthread_mutex_destroy(&mutex)
+  }
+
+  /// Acquire the lock, execute the closure, release the lock.
+  public func doWithLock<Result>(closure: () throws -> Result) rethrows -> Result {
+    _ =  pthread_mutex_lock(&self.mutex)
+    defer {
+      _ = pthread_mutex_unlock(&self.mutex)
+    }
+    return try closure()
+  }
+}
+
+class ThreadSafeMySQL {
+  let db: MySQL
+  let lock: ThreadingLock
+  public init(_ mysql: MySQL) {
+    db = mysql
+    lock = ThreadingLock()
+  }
+  public func query(_ statement: String, storeResult: Bool = true ) throws -> MySQL.Results? {
+    return try lock.doWithLock {
+      guard db.query(statement: statement) else {
+          throw DecisionTree.Exception.DataSource(message: db.errorMessage())
+      }
+      if storeResult, let r = db.storeResults() {
+        return r
+      } else {
+        return nil
+      }
+    }
+  }
+}
 
 open class DTBuilderID3MySQL:DecisionTreeBuilder {
 
-  let db: MySQL
+  let db: ThreadSafeMySQL
   let table: String
   let objective: String
   var views: [String] = []
   var viewID: UInt = 0
-  let lock = Threading.Lock()
-  let queue = Threading.getQueue(type: .concurrent)
   /// constructor of the tree builder
   /// - parameters:
   ///   - mysqlConnection: mysql data source, assuming active and well connected
   ///   - tableName: the table to learn
   ///   - objectiveField: the goal outcome column name
   public init(_ mysqlConnection: MySQL, tableName: String, objectiveField: String) {
-    db = mysqlConnection
+    db = ThreadSafeMySQL(mysqlConnection)
     table = tableName
     objective = objectiveField
   }
@@ -33,9 +75,8 @@ open class DTBuilderID3MySQL:DecisionTreeBuilder {
   deinit {
     for name in views {
       let sql = "DROP VIEW IF EXISTS " + name
-      _ = lock.doWithLock {
-        return db.query(statement: sql)
-      }
+      debugPrint(sql)
+      _ = try? db.query(sql, storeResult: false)
     }
   }
 
@@ -48,13 +89,10 @@ open class DTBuilderID3MySQL:DecisionTreeBuilder {
   public func build(_ from: String) throws -> Any {
     let gain = try entropy(from: from)
     guard gain > 0 else {
-      let r: MySQL.Results = try lock.doWithLock {
-        let sql = "SELECT \(self.objective) FROM \(from) LIMIT 1"
-        guard db.query(statement: sql),
-          let r = db.storeResults() else {
-            throw DecisionTree.Exception.DataSource(message: db.errorMessage())
-        }
-        return r
+      guard let r = try
+        db.query("SELECT \(self.objective) FROM \(from) LIMIT 1")
+        else {
+        throw DecisionTree.Exception.EmptyDataset
       }
       var value = ""
       r.forEachRow { row in
@@ -68,12 +106,10 @@ open class DTBuilderID3MySQL:DecisionTreeBuilder {
       return value
     }
 
-    let r : MySQL.Results = try lock.doWithLock {
-      let sql = "SHOW COLUMNS FROM \(from) WHERE Field <> '\(self.objective)'"
-      guard db.query(statement: sql), let r = db.storeResults() else {
-        throw DecisionTree.Exception.DataSource(message: db.errorMessage())
-      }
-      return r
+    guard let r = try
+      db.query("SHOW COLUMNS FROM \(from) WHERE Field <> '\(self.objective)'")
+      else {
+      throw DecisionTree.Exception.EmptyDataset
     }
     var fields: [String] = []
     r.forEachRow { row in
@@ -91,12 +127,10 @@ open class DTBuilderID3MySQL:DecisionTreeBuilder {
        throw DecisionTree.Exception.UnexpectedKey
     }
 
-    let valueRecords: MySQL.Results = try lock.doWithLock {
-      let sql = "SELECT DISTINCT \(primary) FROM \(from)"
-      guard db.query(statement: sql), let records = db.storeResults() else {
-        throw DecisionTree.Exception.DataSource(message: db.errorMessage())
-      }
-      return records
+    guard let valueRecords = try
+      db.query("SELECT DISTINCT \(primary) FROM \(from)")
+      else {
+        throw DecisionTree.Exception.EmptyDataset
     }
     var values: [String] = []
     valueRecords.forEachRow { row in
@@ -112,20 +146,20 @@ open class DTBuilderID3MySQL:DecisionTreeBuilder {
     let selection = remains.joined(separator: ",")
 
     var branches: [String: Any] = [:]
+    let group = DispatchGroup()
+    let queue = DispatchQueue(label: self.table + primary)
     for v in values {
-      queue.dispatch {
+      queue.async(group: group) {
         do {
           let subview = try self.allocateView("SELECT \(selection) FROM \(from) WHERE \(primary) = '\(v)'")
           let branch = try self.build(subview)
           branches[v] = branch
-        } catch {
+        }catch {
           debugPrint(error.localizedDescription)
         }
       }
     }
-    while branches.count < values.count {
-      Threading.sleep(seconds: 0.1)
-    }
+    group.wait()
     return DecisionTree(primary, branches: branches)
   }
 
@@ -170,12 +204,8 @@ open class DTBuilderID3MySQL:DecisionTreeBuilder {
   /// - returns: a frequent distribution table, each key goes with its possibility in [0,1]
   /// - throws: db exceptions.
   public func frequency(_ sql: String) throws -> [String: Double] {
-    let rec: MySQL.Results = try lock.doWithLock {
-      guard db.query(statement: sql),
-        let rec = db.storeResults() else {
-          throw DecisionTree.Exception.DataSource(message: db.errorMessage())
-      }
-      return rec
+    guard let rec = try db.query(sql) else {
+      throw DecisionTree.Exception.EmptyDataset
     }
     var freq: [String: UInt] = [:]
     rec.forEachRow { row in
@@ -194,18 +224,13 @@ open class DTBuilderID3MySQL:DecisionTreeBuilder {
   /// - returns: name of the new created view
   /// - throws: db exceptions.
   public func allocateView(_ bySQL: String) throws -> String {
-    return try lock.doWithLock {
-      let now = time(nil)
-      let name = table + "\(now)\(viewID)"
-      viewID += 1
-      let sql = "CREATE VIEW \(name) AS \(bySQL);"
-      debugPrint(sql)
-      guard db.query(statement: sql) else {
-        throw DecisionTree.Exception.DataSource(message: db.errorMessage())
-      }
-      views.append(name)
-      return name
-    }
+    let now = time(nil)
+    let name = table + "\(now)\(viewID)"
+    viewID += 1
+    let sql = "CREATE VIEW \(name) AS \(bySQL);"
+    _ = try db.query(sql, storeResult: false)
+    views.append(name)
+    return name
   }
 
   public static func Build(_ for: String, from: Any, tag: String) throws -> DecisionTree {
